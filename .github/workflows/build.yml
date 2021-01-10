@@ -1,0 +1,93 @@
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "The SHA commit hash, branch or tag name to create the build from"
+        required: true
+      name:
+        description: "The name for the release"
+        required: false
+
+env:
+  GITHUB_TOKEN: ${{ secrets.OSMERION_CI_ACCOUNT_TOKEN }}
+
+jobs:
+  draft_release:
+    name: "Draft Release"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: Osmerion/freetype2
+          ref: ${{ github.event.inputs.target }}
+          fetch-depth: 0
+      - name: "Copy"
+        env:
+          BUILD_NAME: ${{ github.event.inputs.name }}
+          OSMERION_CI_ACCOUNT_NAME: ${{ secrets.OSMERION_CI_ACCOUNT_NAME }}
+          OSMERION_CI_ACCOUNT_TOKEN: ${{ secrets.OSMERION_CI_ACCOUNT_TOKEN }}
+        run: |
+          git push https://$OSMERION_CI_ACCOUNT_NAME:$OSMERION_CI_ACCOUNT_TOKEN@github.com/Osmerion/freetype2-ci HEAD:refs/heads/build/$BUILD_NAME
+      - uses: actions/create-release@v1
+        id: create_release
+        with:
+          tag_name: "build/${{ github.event.inputs.name }}"
+          release_name: ${{ github.event.inputs.name }}
+          draft: true
+          commitish: build/${{ github.event.inputs.name }}
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+  win_x32:
+    name: "Windows x86_32"
+    needs: [draft_release]
+    runs-on: windows-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v2
+        with:
+          ref: build/${{ github.event.inputs.name }}
+      - name: "Add msbuild to PATH"
+        uses: microsoft/setup-msbuild@v1.0.2
+      - name: "Build"
+        run: msbuild ./builds/windows/vc2010/freetype.sln /p:Configuration=Release /p:Platform=Win32
+      - name: "Bundle"
+        run: |
+          cd ./objs
+          mkdir freetype2_win_x86_32
+          cp ./freetype.dll ./freetype2_win_x86_32/freetype.dll
+          Compress-Archive -Path ./freetype2_win_x86_32 -DestinationPath freetype2_win_x86_32.zip
+      - name: "Upload"
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ needs.draft_release.outputs.upload_url }}
+          asset_path: ./objs/freetype2_win_x86_32.zip
+          asset_name: freetype2_win_x86_32.zip
+          asset_content_type: application/zip
+
+  win_x64:
+    name: "Windows x86_64"
+    needs: [draft_release]
+    runs-on: windows-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v2
+        with:
+          ref: build/${{ github.event.inputs.name }}
+      - name: "Add msbuild to PATH"
+        uses: microsoft/setup-msbuild@v1.0.2
+      - name: "Build"
+        run: msbuild ./builds/windows/vc2010/freetype.sln /p:Configuration=Release /p:Platform=x64
+      - name: "Bundle"
+        run: |
+          cd ./objs
+          mkdir freetype2_win_x86_64
+          cp ./freetype.dll ./freetype2_win_x86_64/freetype.dll
+          Compress-Archive -Path ./freetype2_win_x86_64 -DestinationPath freetype2_win_x86_64.zip
+      - name: "Upload"
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ needs.draft_release.outputs.upload_url }}
+          asset_path: ./objs/freetype2_win_x86_64.zip
+          asset_name: freetype2_win_x86_64.zip
+          asset_content_type: application/zip
