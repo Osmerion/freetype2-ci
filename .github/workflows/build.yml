@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          repository: Osmerion/freetype2
+          repository: Osmerion-CI/freetype2
           ref: ${{ github.event.inputs.target }}
           fetch-depth: 0
       - name: "Copy"
